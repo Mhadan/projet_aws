@@ -82,4 +82,3 @@ jobs:
           ansible-playbook -i inventory.ini ansible/deploy.yml
         env:
           ANSIBLE_HOST_KEY_CHECKING: "False"
-EOF
