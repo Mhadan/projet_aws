@@ -1,141 +1,78 @@
 provider "aws" {
-region = "us-east-1"
+  region = "us-east-1"
 }
 
 # =====================
-
-# VPC
-
+# DEFAULT VPC
 # =====================
-
-resource "aws_vpc" "main" {
-cidr_block = "10.0.0.0/16"
-
-tags = {
-Name = "main-vpc"
-}
+data "aws_vpc" "default" {
+  default = true
 }
 
-# =====================
-
-# Internet Gateway
-
-# =====================
-
-resource "aws_internet_gateway" "gw" {
-vpc_id = aws_vpc.main.id
-
-tags = {
-Name = "main-igw"
-}
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
 }
 
 # =====================
-
-# Public Subnet
-
+# SECURITY GROUP
 # =====================
-
-resource "aws_subnet" "public" {
-vpc_id                  = aws_vpc.main.id
-cidr_block              = "10.0.1.0/24"
-map_public_ip_on_launch = true
-
-tags = {
-Name = "public-subnet"
-}
-}
-
-# =====================
-
-# Route Table
-
-# =====================
-
-resource "aws_route_table" "public_rt" {
-vpc_id = aws_vpc.main.id
-
-route {
-cidr_block = "0.0.0.0/0"
-gateway_id = aws_internet_gateway.gw.id
-}
-
-tags = {
-Name = "public-route-table"
-}
-}
-
-# =====================
-
-# Route Table Association
-
-# =====================
-
-resource "aws_route_table_association" "public_assoc" {
-subnet_id      = aws_subnet.public.id
-route_table_id = aws_route_table.public_rt.id
-}
-
-# =====================
-
-# Security Group
-
-# =====================
-
 resource "aws_security_group" "web_sg" {
-name   = "web-sg"
-vpc_id = aws_vpc.main.id
+  name   = "web-sg"
+  vpc_id = data.aws_vpc.default.id
 
-ingress {
-description = "SSH"
-from_port   = 22
-to_port     = 22
-protocol    = "tcp"
-cidr_blocks = ["0.0.0.0/0"]
-}
+  # SSH
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-ingress {
-description = "HTTP"
-from_port   = 80
-to_port     = 80
-protocol    = "tcp"
-cidr_blocks = ["0.0.0.0/0"]
-}
+  # HTTP
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-egress {
-from_port   = 0
-to_port     = 0
-protocol    = "-1"
-cidr_blocks = ["0.0.0.0/0"]
-}
+  # outbound
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "web-sg"
+  }
 }
 
 # =====================
-
-# EC2 Instances
-
+# EC2 INSTANCES
 # =====================
-
 resource "aws_instance" "web" {
-count         = 2
-ami           = "ami-0c02fb55956c7d316"
-instance_type = "t2.micro"
+  count         = 2
+  ami           = "ami-0c02fb55956c7d316" # Amazon Linux 2 (us-east-1)
+  instance_type = "t2.micro"
 
-subnet_id                  = aws_subnet.public.id
-vpc_security_group_ids     = [aws_security_group.web_sg.id]
-associate_public_ip_address = true
+  subnet_id              = data.aws_subnets.default.ids[0]
+  vpc_security_group_ids = [aws_security_group.web_sg.id]
 
-tags = {
-Name = "ecommerce-server"
-}
+  associate_public_ip_address = true
+
+  tags = {
+    Name = "ecommerce-server"
+  }
 }
 
 # =====================
-
-# Outputs
-
+# OUTPUT
 # =====================
-
 output "instance_public_ips" {
-value = aws_instance.web[*].public_ip
+  value = aws_instance.web[*].public_ip
 }
