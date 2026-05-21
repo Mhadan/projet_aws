@@ -20,33 +20,30 @@ data "aws_subnets" "default" {
 # SECURITY GROUP
 # =====================
 resource "aws_security_group" "web_sg" {
-  name   = "web-sg"
-  vpc_id = data.aws_vpc.default.id
-
-  # SSH
+  name        = "web-sg-${formatdate("YYYYMMDDhhmmss", timestamp())}"
+  vpc_id      = data.aws_vpc.default.id
+ 
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
-  # HTTP
+ 
   ingress {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
-  # outbound
+ 
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+ 
   tags = {
     Name = "web-sg"
   }
