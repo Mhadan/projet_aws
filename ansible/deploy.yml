@@ -1,19 +1,19 @@
 - name: Configure EC2 for E-commerce App
   hosts: web
   become: true
-
+ 
   tasks:
-
+ 
     - name: Update system
       yum:
         name: "*"
         state: latest
-
+ 
     - name: Install Docker
       yum:
         name: docker
         state: present
-
+ 
     - name: Start Docker service
       service:
         name: docker
