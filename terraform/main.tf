@@ -74,7 +74,7 @@ resource "aws_instance" "web" {
 output "instance_public_ips" {
   value = aws_instance.web[*].public_ip
 }
-hclterraform {
+terraform {
   backend "s3" {
     bucket = "terraform-state-projet-aws-1779358043"
     key    = "terraform.tfstate"
