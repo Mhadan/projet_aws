@@ -1,4 +1,4 @@
-erraform {
+terraform {
   backend "s3" {
     bucket = "terraform-state-projet-aws-1779358043"
     key    = "terraform.tfstate"
