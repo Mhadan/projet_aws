@@ -54,7 +54,7 @@ resource "aws_security_group" "web_sg" {
 # =====================
 resource "aws_instance" "web" {
   count         = 2
-  ami           = "ami-0fff1b9a621be73a9" # Amazon Linux 2 (us-east-1)
+  ami           = "ami-02b2c1b57c5105166" # Amazon Linux 2 (us-east-1)
   instance_type = "t2.micro"
    key_name = "vockey"
 
