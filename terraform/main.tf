@@ -1,76 +1,133 @@
-terraform {
-  backend "s3" {
-    bucket = "terraform-state-projet-aws-1779358043"
-    key    = "terraform.tfstate"
-    region = "us-east-1"
-  }
-}
+- name: Configure EC2 for E-commerce App
+  hosts: web
+  become: true
  
-provider "aws" {
-  region = "us-east-1"
-}
+  tasks:
  
-data "aws_vpc" "default" {
-  default = true
-}
+    - name: Update system
+      yum:
+        name: "*"
+        state: latest
  
-data "aws_subnets" "default" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
-  }
-}
+    - name: Install Docker
+      yum:
+        name: docker
+        state: present
  
-resource "aws_security_group" "web_sg" {
-  name   = "web-sg"
-  vpc_id = data.aws_vpc.default.id
+    - name: Start Docker service
+      service:
+        name: docker
+        state: started
+        enabled: yes
  
-  lifecycle {
-    create_before_destroy = false
-    ignore_changes        = [name]
-  }
+    - name: Install Docker Compose
+      shell: |
+        curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        chmod +x /usr/local/bin/docker-compose
  
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+    - name: Create app directory
+      file:
+        path: /app
+        state: directory
  
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+    - name: Create docker-compose.yml
+      copy:
+        dest: /app/docker-compose.yml
+        content: |
+          version: '3'
+          services:
+            mongodb:
+              image: mongo:4.4
+              container_name: mongodb
+              restart: always
+              environment:
+                MONGO_INITDB_DATABASE: ecommerce
  
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+            app:
+              image: node:14
+              container_name: nodeapp
+              working_dir: /app
+              volumes:
+                - ./app:/app
+              command: sh -c "npm install && node server.js"
+              ports:
+                - "3000:3000"
+              depends_on:
+                - mongodb
+              environment:
+                MONGO_URL: mongodb://mongodb:27017/ecommerce
  
-  tags = {
-    Name = "web-sg"
-  }
-}
+            nginx:
+              image: nginx:latest
+              container_name: nginx
+              ports:
+                - "80:80"
+              volumes:
+                - ./nginx.conf:/etc/nginx/conf.d/default.conf
+              depends_on:
+                - app
  
-resource "aws_instance" "web" {
-  count         = 2
-  ami           = "ami-02b2c1b57c5105166"
-  instance_type = "t2.micro"
-  key_name      = "vockey"
+    - name: Create Node.js app
+      file:
+        path: /app/app
+        state: directory
  
-  subnet_id                   = data.aws_subnets.default.ids[0]
-  vpc_security_group_ids      = [aws_security_group.web_sg.id]
-  associate_public_ip_address = true
+    - name: Create package.json
+      copy:
+        dest: /app/app/package.json
+        content: |
+          {
+            "name": "ecommerce",
+            "version": "1.0.0",
+            "dependencies": {
+              "express": "^4.18.2",
+              "mongoose": "^7.0.0"
+            }
+          }
  
-  tags = {
-    Name = "ecommerce-server"
-  }
-}
+    - name: Create server.js
+      copy:
+        dest: /app/app/server.js
+        content: |
+          const express = require('express');
+          const mongoose = require('mongoose');
+          const app = express();
  
-output "instance_public_ips" {
-  value = aws_instance.web[*].public_ip
-}
+          mongoose.connect(process.env.MONGO_URL);
+ 
+          const Product = mongoose.model('Product', {
+            name: String,
+            price: Number
+          });
+ 
+          app.get('/', async (req, res) => {
+            const products = await Product.find();
+            let html = '<h1>E-Commerce Store</h1><ul>';
+            products.forEach(p => {
+              html += '<li>' + p.name + ' - $' + p.price + '</li>';
+            });
+            html += '</ul>';
+            res.send(html);
+          });
+ 
+          app.listen(3000, async () => {
+            await Product.create([
+              { name: 'Laptop', price: 1200 },
+              { name: 'Phone', price: 800 }
+            ]);
+            console.log('Server running on port 3000');
+          });
+ 
+    - name: Create Nginx config
+      copy:
+        dest: /app/nginx.conf
+        content: |
+          server {
+            listen 80;
+            location / {
+              proxy_pass http://app:3000;
+            }
+          }
+ 
+    - name: Start all containers
+      shell: cd /app && docker-compose up -d
